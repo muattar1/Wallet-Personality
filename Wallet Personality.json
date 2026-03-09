@@ -1,0 +1,235 @@
+{
+  "name": "Wallet Personality",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "71f57a95-49dc-4216-9eb0-2a32debbeb2e",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://eth-mainnet.g.alchemy.com/v2/your alchomy api key",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"id\": 1,\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"alchemy_getAssetTransfers\",\n  \"params\": [\n    {\n      \"fromBlock\": \"0x0\",\n      \"toBlock\": \"latest\",\n      \"fromAddress\": \"0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D\", \n      \"category\": [\"external\", \"erc20\", \"erc721\", \"erc1155\"],\n      \"withMetadata\": true,\n      \"excludeZeroValue\": true,\n      \"maxCount\": \"0x3e8\" \n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "aeabe289-dd85-460b-a857-27727415d662",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet transactions = [];\n\nif (items.length > 0 && items[0].json.result && items[0].json.result.transfers) {\n  transactions = items[0].json.result.transfers;\n}\n\nconst simplifiedData = transactions.slice(0, 15).map(tx => ({\n    asset: tx.asset,\n    value: tx.value,\n    to: tx.to,\n    time: tx.metadata ? tx.metadata.blockTimestamp : 'N/A', // Time add kar diya\n    category: tx.category\n}));\n\nreturn {\n  geminiInput: JSON.stringify(simplifiedData),\n  totalFound: transactions.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "47f5312b-2915-454e-9d4d-6e5536ee9760",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze this wallet data for its \"Personality\":\n\n{{ $json.geminiInput }}\n\nInstructions:\n\nIdentify if this is a \"Patient Investor\", \"Degen/Gambler\", or \"Bot/Airdrop Hunter\".\n\nGive a 2-line creative summary in Hinglish/Urdu.\n\nGive a Risk Score (1-10)."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "id": "cc4fb241-6991-4b1a-afe7-40c2c756cdc2",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "CLxwa2Sh73ZmjNeh",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.all()[0].json.content.parts[0].text;\n\n// Regex use kar ke specific parts nikal rahe hain\nconst personalityMatch = text.match(/\\*\\*Personality:\\*\\*\\s*\\*\\*(.*?)\\*\\*/);\nconst riskScoreMatch = text.match(/\\*\\*Risk Score:\\*\\*\\s*\\*\\*(.*?)\\*\\*/);\n\n// Summary nikalne ke liye Hinglish section ko target kar rahe hain\nconst summaryLines = text.split('---')[1] || \"\";\nconst cleanSummary = summaryLines.replace(/\\*\\*Creative Summary \\(Hinglish\\/Urdu\\):\\*\\*/, \"\").trim();\n\nreturn {\n  personality: personalityMatch ? personalityMatch[1] : \"Unknown\",\n  riskScore: riskScoreMatch ? riskScoreMatch[1] : \"N/A\",\n  hinglishSummary: cleanSummary\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        0
+      ],
+      "id": "68824147-d160-40ec-b2b0-0053286f3966",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "yW5wSS3e70ZlVL90",
+          "mode": "list",
+          "cachedResultName": "riskScore",
+          "cachedResultUrl": "/projects/NOOdCLYt5uFiivRS/datatables/yW5wSS3e70ZlVL90"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "riskScore": "={{ $json.riskScore }}",
+            "personality": "={{ $json.personality }}",
+            "hinglishSummary": "={{ $json.hinglishSummary }}",
+            "walletAddress": "={{ $('HTTP Request').item.json.result.transfers[0].rawContract.address }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "personality",
+              "displayName": "personality",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "hinglishSummary",
+              "displayName": "hinglishSummary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "walletAddress",
+              "displayName": "walletAddress",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "riskScore",
+              "displayName": "riskScore",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "fa80d515-b0d0-44dc-93eb-e35d86d733d4",
+      "name": "Insert row"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c8eecb1b-5e14-4a0a-ba38-363fed5be414",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3d1193b50436e78afd5ebcc6f6511feb5b2551c207aee2622198a56808688222"
+  },
+  "id": "7QG62nacm3AABxw0",
+  "tags": []
+}
